@@ -262,7 +262,7 @@ namespace UserApis.Controllers
 
                 var jsonResponse = JsonConvert.SerializeObject(new
                 {
-                    userId = Guid.NewGuid(),
+                    userId = newUser.userId,
                     userName = newUser.userName
                 });
 
@@ -312,8 +312,62 @@ namespace UserApis.Controllers
 
         //************************************************************************************************
 
-        [HttpPatch("update/{id}/{responseFormat}")]
-        public ActionResult UpdateData([FromBody] UserEntity newUser,int id,string responseFormat)
+        [HttpPatch("update/{id}/xml/{responseFormat}")]
+        public ActionResult UpdateDataXmlPacket([FromBody] UserEntity userEntity,int id,string responseFormat)
+        {
+            var data = Get(id);
+
+            if (data == null)
+            {
+                return NotFound();
+            }
+
+            data.Value.userId = userEntity.userId;
+            data.Value.userName = userEntity.userName;
+
+            if (responseFormat == "json")
+            {
+
+                var jsonResult = JsonConvert.SerializeObject(data);
+                return Content(jsonResult, "application/json");
+
+            }
+            else if (responseFormat == "text")
+            {
+                var textResult = new ContentResult
+                {
+                    Content = $"UserId: {data.Value.userId}, UserName: {data.Value.userName}",
+                    ContentType = "text/plain",
+                    StatusCode = 200
+                };
+
+                return textResult;
+
+            }
+            else if (responseFormat == "xml")
+            {
+                UserEntity newUser = new UserEntity();
+                newUser.userId = data.Value.userId;
+                newUser.userName = data.Value.userName;
+
+                var xmlSerializer = new XmlSerializer(typeof(UserEntity));
+                var xmlResult = new ContentResult
+                {
+                    Content = SerializeObjectToXml(newUser, xmlSerializer),
+                    ContentType = "application/xml",
+                    StatusCode = 200
+                };
+
+                return xmlResult;
+            }
+
+            return BadRequest("Invalid response format specified");
+        }
+
+        //************************************************************************************************
+
+        [HttpPatch("update/{id}/json/{responseFormat}")]
+        public ActionResult UpdateDataJsonPacket([FromBody] UserEntity newUser,int id,string responseFormat)
         {
             var data = Get(id);
 
@@ -364,6 +418,58 @@ namespace UserApis.Controllers
 
         //************************************************************************************************
 
+        [HttpPatch("update/{id}/text/{responseFormat}")]
+        public ActionResult UpdateDataTextPacket([FromBody] string textData, string responseFormat)
+        {
+
+            UserEntity userEntity = new UserEntity();
+
+            if (textData == null)
+            {
+                return BadRequest(responseFormat);
+            }
+
+            Regex userIdRegex = new Regex(@"userId = (\d+)");
+            Regex userNameRegex = new Regex(@"userName = (\w+)");
+
+
+            Match userIdMatch = userIdRegex.Match(textData);
+            Match userNameMatch = userNameRegex.Match(textData);
+
+            if (userIdMatch.Success && userNameMatch.Success)
+            {
+                string userId = userIdMatch.Groups[1].Value;
+                userEntity.userId = Convert.ToInt32(userId);
+                string userName = userNameMatch.Groups[1].Value;
+                userEntity.userName = userName;
+
+            }
+
+            if (responseFormat.ToLower() == "json")
+            {
+                return new JsonResult(userEntity);
+            }
+            else if (responseFormat.ToLower() == "xml")
+            {
+                var serializer = new XmlSerializer(typeof(UserEntity));
+                var xmlString = "";
+
+                using (var stringWriter = new System.IO.StringWriter())
+                {
+                    serializer.Serialize(stringWriter, userEntity);
+                    xmlString = stringWriter.ToString();
+                }
+
+                return Content(xmlString, "application/xml");
+            }
+
+            var plainText = $"UserId : {userEntity.userId} , UserName : {userEntity.userName}";
+            return Content(plainText, "text/plain");
+        }
+
+        //************************************************************************************************
+
+
         //This method is for to convert json object to xml
         public static string SerializeObjectToXml(object obj , XmlSerializer xmlSerializer)
         {
@@ -372,6 +478,248 @@ namespace UserApis.Controllers
                 xmlSerializer.Serialize(writer, obj);
                 return writer.ToString();
             }
+        }
+
+        //**************************************** Gayatri ****************************************************
+        //***************************************** Code ******************************************************
+
+
+
+        // PUT api/<StudentsController>/5
+        [HttpPut("{id}")]
+        [HttpPut("json")]
+        [Consumes("application/json")]
+        [Produces("application/json")]
+        public IActionResult UpdateJson([FromBody] UserEntity studentEntity)
+        {
+            var existingStudent = users.FirstOrDefault(s => s.userId == studentEntity.userId);
+            if (existingStudent != null)
+            {
+                existingStudent.userName = studentEntity.userName;
+                return Ok(new { Id = existingStudent.userId, Name = existingStudent.userName });
+            }
+            return NotFound(new { Message = "Not found" });
+        }
+
+        [HttpPut("json-xml")]
+        [Consumes("application/json")]
+        [Produces("application/xml")]
+
+        public IActionResult UpdateJsonToXml([FromBody] UserEntity studentEntity)
+        {
+            var existingStudent = users.FirstOrDefault(s => s.userId == studentEntity.userId);
+            if (existingStudent != null)
+            {
+                existingStudent.userName = studentEntity.userName;
+
+                UserEntity newStudent = new UserEntity();
+                newStudent.userId = studentEntity.userId;
+                newStudent.userName = existingStudent.userName;
+
+                var xmlSerializer = new XmlSerializer(typeof(UserEntity));
+                var xmlResult = new ContentResult
+                {
+                    Content = SerializeObjectToXml(newStudent, xmlSerializer),
+                    ContentType = "application/xml",
+                    StatusCode = 200
+                };
+
+                return xmlResult;
+            }
+
+            return NotFound(new { Message = "Not Found" });
+        }
+
+
+        [HttpPut("json-text")]
+        [Consumes("application/json")]
+        [Produces("text/plain")]
+        public ContentResult UpdateJsonToText([FromBody] UserEntity studentEntity)
+        {
+            var existingStudent = users.FirstOrDefault(s => s.userId == studentEntity.userId);
+
+            if (existingStudent != null)
+            {
+                existingStudent.userName = studentEntity.userName;
+                return Content($"Id: {existingStudent.userId} Name: {existingStudent.userName}", "text/plain");
+            }
+
+            return Content("Not found", "text/plain");
+        }
+
+
+        [HttpPut("xml-xml/{id}")]
+        [Consumes("application/xml")]
+        [Produces("application/xml")]
+        public ActionResult UpdateXmlToXml([FromBody] UserEntity studentXml, int id)
+        {
+            if (ModelState.IsValid)
+            {
+                var existingStudent = users.FirstOrDefault(s => s.userId == studentXml.userId);
+
+                if (existingStudent != null)
+                {
+                    existingStudent.userName = studentXml.userName;
+
+                    UserEntity newStudent = new UserEntity();
+                    newStudent.userId = studentXml.userId;
+                    newStudent.userName = existingStudent.userName;
+
+                    var xmlSerializer = new XmlSerializer(typeof(UserEntity));
+                    var xmlResult = new ContentResult
+                    {
+                        Content = SerializeObjectToXml(newStudent, xmlSerializer),
+                        ContentType = "application/xml",
+                        StatusCode = 200
+                    };
+
+                    return xmlResult;
+                }
+            }
+
+            return NotFound(new { Message = "Not found" });
+        }
+
+        [HttpPut("xml-json/{id}")]
+        [Consumes("application/xml")]
+        [Produces("application/json")]
+        public ActionResult UpdateXmlToJson([FromBody] UserEntity studentEntity, int id)
+        {
+            if (ModelState.IsValid)
+            {
+
+                var existingStudent = users.FirstOrDefault(s => s.userId == studentEntity.userId);
+
+                UserEntity stuEntity = new UserEntity();
+                stuEntity.userId = studentEntity.userId;
+                stuEntity.userName = studentEntity.userName;
+
+                var jsonResponse = JsonConvert.SerializeObject(stuEntity);
+                return Content(jsonResponse, "application/json");
+            }
+
+            return NotFound(new { Message = "Not found" });
+        }
+
+        [HttpPut("xml-plain/{id}")]
+        [Consumes("application/xml")]
+        [Produces("text/plain")]
+        public ActionResult UpdateXmlToPlainText([FromBody] UserEntity studentEntity, int id)
+        {
+            if (ModelState.IsValid)
+            {
+                var existingStudent = users.FirstOrDefault(s => s.userId == id);
+
+                if (existingStudent != null)
+                {
+                    existingStudent.userName = studentEntity.userName;
+
+                    var plainTextResponse = $"UserId : {existingStudent.userId}, UserName : {existingStudent.userName}";
+
+                    return Content(plainTextResponse, "text/plain");
+                }
+
+                return NotFound(new { Message = "Not found" });
+            }
+
+            return BadRequest(ModelState);
+        }
+
+
+        [HttpPut("text-xml/{id}")]
+        [Consumes("text/plain")]
+        [Produces("application/xml")]
+        public ActionResult UpdateTextToXml([FromBody] string studentData, int id)
+        {
+
+            UserEntity stuEntity = new UserEntity();
+
+            Regex idRegex = new Regex(@"Id = (\d+)");
+            Regex nameRegex = new Regex(@"Name = (\w+)");
+
+            Match IdMatch = idRegex.Match(studentData);
+            Match NameMatch = nameRegex.Match(studentData);
+
+            if (IdMatch.Success && NameMatch.Success)
+            {
+                string studentId = IdMatch.Groups[1].Value;
+                stuEntity.userId = Convert.ToInt32(studentId);
+                string userName = NameMatch.Groups[1].Value;
+                stuEntity.userName = userName;
+
+            }
+
+            var xmlSerializer = new XmlSerializer(typeof(UserEntity));
+            var xmlResult = new ContentResult
+            {
+                Content = SerializeObjectToXml(stuEntity, xmlSerializer),
+                ContentType = "application/xml",
+                StatusCode = 200
+            };
+
+            return xmlResult;
+        }
+
+        [HttpPut("text-json/{id}")]
+        [Consumes("text/plain")]
+        [Produces("application/json")]
+        public IActionResult UpdateTextToJson([FromBody] string studentInfo, int id)
+        {
+            UserEntity stuEntity = new UserEntity();
+
+            Regex idRegex = new Regex(@"Id = (\d+)");
+            Regex nameRegex = new Regex(@"Name = (\w+)");
+
+            Match IdMatch = idRegex.Match(studentInfo);
+            Match NameMatch = nameRegex.Match(studentInfo);
+
+            if (IdMatch.Success && NameMatch.Success)
+            {
+                string studentId = IdMatch.Groups[1].Value;
+                stuEntity.userId = Convert.ToInt32(studentId);
+                string userName = NameMatch.Groups[1].Value;
+                stuEntity.userName = userName;
+
+            }
+            var jsonResponse = JsonConvert.SerializeObject(stuEntity);
+            return Content(jsonResponse, "application/json");
+        }
+
+        [HttpPut("text-text/{id}")]
+        [Consumes("text/plain")]
+        [Produces("text/plain")]
+        public IActionResult UpdateTextToText([FromBody] string stuInfo, int id)
+        {
+            UserEntity stuEntity = new UserEntity();
+
+            Regex idRegex = new Regex(@"Id = (\d+)");
+            Regex nameRegex = new Regex(@"Name = (\w+)");
+
+            Match IdMatch = idRegex.Match(stuInfo);
+            Match NameMatch = nameRegex.Match(stuInfo);
+
+            if (IdMatch.Success && NameMatch.Success)
+            {
+                string studentId = IdMatch.Groups[1].Value;
+                stuEntity.userId = Convert.ToInt32(studentId);
+                string userName = NameMatch.Groups[1].Value;
+                stuEntity.userName = userName;
+
+            }
+            var plainTextResponse = $"UserId : {stuEntity.userId}, UserName : {stuEntity.userName}";
+
+            return Content(plainTextResponse, "text/plain");
+        }
+
+
+
+
+
+
+        [HttpDelete("{id}")]
+        public void DeleteStudent(int id)
+        {
+            users.RemoveAll(s => s.userId == id);
         }
 
     }
